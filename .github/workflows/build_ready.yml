@@ -41,6 +41,7 @@ jobs:
         run: |
           mkdir -p "$HOME/Arduino/libraries"
           cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
 
       - name: Compile Leonardo
         run: |
