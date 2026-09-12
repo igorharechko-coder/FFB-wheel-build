@@ -28,68 +28,50 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           cfg_h = Path('Firmware_Leonardo/brWheel_my/Config.h')
           s = cfg_h.read_text()
-          old = '#define FIRMWARE_VERSION         0xFA'
-          new = '#define FIRMWARE_VERSION         0xFB'
-          if old in s:
-              s = s.replace(old, new, 1)
-          elif new not in s:
+          s, n = re.subn(r'#define FIRMWARE_VERSION\s+0xFA', '#define FIRMWARE_VERSION         0xFB', s, count=1)
+          if n != 1 and 'FIRMWARE_VERSION         0xFB' not in s:
               raise SystemExit('FIRMWARE_VERSION marker not found')
           cfg_h.write_text(s)
 
           cfg = Path('Firmware_Leonardo/brWheel_my/Config.ino')
           s = cfg.read_text()
-          old_block = '''  v8 = 100; //milos, added
-          SetParam(PARAM_ADDR_GEN_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_CNT_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_PER_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_STP_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_SPR_GAIN, v8); //milos, added
-          v8 = 50; //milos, added
-          SetParam(PARAM_ADDR_DMP_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_FRC_GAIN, v8); //milos, added
-          SetParam(PARAM_ADDR_INR_GAIN, v8); //milos, added
-          v8 = 70; //milos, added
-          SetParam(PARAM_ADDR_CTS_GAIN, v8); // milos, added
-          '''
-          new_block = '''  v8 = 90; // R5-like baseline: strong but leaves clipping headroom
-          SetParam(PARAM_ADDR_GEN_GAIN, v8);
-          v8 = 100;
-          SetParam(PARAM_ADDR_CNT_GAIN, v8);
-          SetParam(PARAM_ADDR_PER_GAIN, v8);
-          SetParam(PARAM_ADDR_STP_GAIN, v8);
-          v8 = 90;
-          SetParam(PARAM_ADDR_SPR_GAIN, v8);
-          v8 = 25; // light damping: stability without masking detail
-          SetParam(PARAM_ADDR_DMP_GAIN, v8);
-          v8 = 10; // low friction: preserve small road effects
-          SetParam(PARAM_ADDR_FRC_GAIN, v8);
-          v8 = 15; // modest inertia: natural wheel mass, quick response
-          SetParam(PARAM_ADDR_INR_GAIN, v8);
-          v8 = 25; // light desktop centering; games provide their own forces
-          SetParam(PARAM_ADDR_CTS_GAIN, v8);
-          '''
-          if old_block not in s:
-              raise SystemExit('Leonardo default tuning block not found')
-          s = s.replace(old_block, new_block, 1)
+          gains = {
+              'GEN': 90,
+              'CNT': 100,
+              'PER': 100,
+              'STP': 100,
+              'SPR': 90,
+              'DMP': 25,
+              'FRC': 10,
+              'INR': 15,
+              'CTS': 25,
+          }
+          for key, value in gains.items():
+              pat = rf'(^\s*)SetParam\(PARAM_ADDR_{key}_GAIN, v8\);[^\n]*'
+              repl = rf'\1v8 = {value};\n\1SetParam(PARAM_ADDR_{key}_GAIN, v8);'
+              s, n = re.subn(pat, repl, s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Gain marker not found: {key}')
           cfg.write_text(s)
 
           ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
           s = ino.read_text()
           replacements = {
-              '  configGeneralGain = 100;': '  configGeneralGain = 90;',
-              '  configDamperGain = 50;': '  configDamperGain = 25;',
-              '  configFrictionGain = 50;': '  configFrictionGain = 10;',
-              '  configSpringGain = 50;': '  configSpringGain = 90;',
-              '  configInertiaGain = 50;': '  configInertiaGain = 15;',
-              '  configCenterGain = 70;': '  configCenterGain = 25;',
+              'configGeneralGain': 90,
+              'configDamperGain': 25,
+              'configFrictionGain': 10,
+              'configSpringGain': 90,
+              'configInertiaGain': 15,
+              'configCenterGain': 25,
           }
-          for old, new in replacements.items():
-              if old not in s:
-                  raise SystemExit(f'Fallback tuning marker not found: {old}')
-              s = s.replace(old, new, 1)
+          for name, value in replacements.items():
+              s, n = re.subn(rf'(^\s*{name}\s*=\s*)\d+(;)', rf'\g<1>{value}\2', s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Fallback tuning marker not found: {name}')
           ino.write_text(s)
           PY
 
