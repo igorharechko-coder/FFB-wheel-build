@@ -23,6 +23,10 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
+      - name: Fix Linux include case
+        run: |
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
       - name: Apply modified Arduino core
         run: |
           CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
