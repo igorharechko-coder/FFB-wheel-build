@@ -23,6 +23,76 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
+      - name: Apply R5-like baseline tuning
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          cfg_h = Path('Firmware_Leonardo/brWheel_my/Config.h')
+          s = cfg_h.read_text()
+          old = '#define FIRMWARE_VERSION         0xFA'
+          new = '#define FIRMWARE_VERSION         0xFB'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('FIRMWARE_VERSION marker not found')
+          cfg_h.write_text(s)
+
+          cfg = Path('Firmware_Leonardo/brWheel_my/Config.ino')
+          s = cfg.read_text()
+          old_block = '''  v8 = 100; //milos, added
+          SetParam(PARAM_ADDR_GEN_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_CNT_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_PER_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_STP_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_SPR_GAIN, v8); //milos, added
+          v8 = 50; //milos, added
+          SetParam(PARAM_ADDR_DMP_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_FRC_GAIN, v8); //milos, added
+          SetParam(PARAM_ADDR_INR_GAIN, v8); //milos, added
+          v8 = 70; //milos, added
+          SetParam(PARAM_ADDR_CTS_GAIN, v8); // milos, added
+          '''
+          new_block = '''  v8 = 90; // R5-like baseline: strong but leaves clipping headroom
+          SetParam(PARAM_ADDR_GEN_GAIN, v8);
+          v8 = 100;
+          SetParam(PARAM_ADDR_CNT_GAIN, v8);
+          SetParam(PARAM_ADDR_PER_GAIN, v8);
+          SetParam(PARAM_ADDR_STP_GAIN, v8);
+          v8 = 90;
+          SetParam(PARAM_ADDR_SPR_GAIN, v8);
+          v8 = 25; // light damping: stability without masking detail
+          SetParam(PARAM_ADDR_DMP_GAIN, v8);
+          v8 = 10; // low friction: preserve small road effects
+          SetParam(PARAM_ADDR_FRC_GAIN, v8);
+          v8 = 15; // modest inertia: natural wheel mass, quick response
+          SetParam(PARAM_ADDR_INR_GAIN, v8);
+          v8 = 25; // light desktop centering; games provide their own forces
+          SetParam(PARAM_ADDR_CTS_GAIN, v8);
+          '''
+          if old_block not in s:
+              raise SystemExit('Leonardo default tuning block not found')
+          s = s.replace(old_block, new_block, 1)
+          cfg.write_text(s)
+
+          ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = ino.read_text()
+          replacements = {
+              '  configGeneralGain = 100;': '  configGeneralGain = 90;',
+              '  configDamperGain = 50;': '  configDamperGain = 25;',
+              '  configFrictionGain = 50;': '  configFrictionGain = 10;',
+              '  configSpringGain = 50;': '  configSpringGain = 90;',
+              '  configInertiaGain = 50;': '  configInertiaGain = 15;',
+              '  configCenterGain = 70;': '  configCenterGain = 25;',
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'Fallback tuning marker not found: {old}')
+              s = s.replace(old, new, 1)
+          ino.write_text(s)
+          PY
+
       - name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
@@ -68,6 +138,22 @@ jobs:
 
       - name: Extract source bundle
         run: unzip -q source_bundle.zip
+
+      - name: Apply R5-like motor-side smoothing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Inc/config.h')
+          s = p.read_text()
+          old = '#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing'
+          new = '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('DEFAULT_FILTER marker not found')
+          p.write_text(s)
+          PY
 
       - name: Install ARM GCC
         run: |
