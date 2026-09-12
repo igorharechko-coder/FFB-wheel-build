@@ -1,0 +1,90 @@
+name: Build FFB ready-to-flash firmware
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'source_bundle.zip'
+      - '.github/workflows/build_ready.yml'
+
+jobs:
+  build-leonardo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.6.21
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+
+      - name: Compile Leonardo
+        run: |
+          mkdir -p build_leonardo READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_FFB_MT6701
+          path: READY_TO_FLASH/Leonardo_FFB_MT6701.hex
+
+  build-gd32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Compile GD32
+        working-directory: Firmware_GD32
+        run: |
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          test -f build/hover.bin
+          test -f build/hover.hex
+
+      - name: Collect GD32 files
+        run: |
+          mkdir -p READY_TO_FLASH
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_FOC_24V_RIGHT
+          path: |
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
