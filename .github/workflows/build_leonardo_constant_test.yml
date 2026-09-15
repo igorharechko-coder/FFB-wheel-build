@@ -69,11 +69,7 @@ jobs:
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
           cp "$HEX" TEST_READY/Leonardo_UART_MOTOR_TEST_5PCT.hex
-          cat > TEST_READY/README.txt <<'EOF'
-DIAGNOSTIC FIRMWARE ONLY.
-Outputs a fixed +5% hoverboard motor command (speed field = +50 of 1000) whenever the FFB output routine runs.
-Use only briefly with the wheel/motor free to move. Restore Leonardo_FFB_MT6701.hex after the test.
-EOF
+          printf '%s\n' 'DIAGNOSTIC FIRMWARE ONLY.' 'Fixed +5% hoverboard motor command.' 'Use briefly with motor free to move. Restore Leonardo_FFB_MT6701.hex after test.' > TEST_READY/README.txt
 
       - uses: actions/upload-artifact@v4
         with:
