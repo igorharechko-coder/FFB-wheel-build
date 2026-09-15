@@ -1,0 +1,72 @@
+name: Build UART test variants
+on:
+  push:
+    branches: [fix-uart-protocol]
+    paths:
+      - '.github/workflows/build_uart_test_variants.yml'
+      - 'source_bundle.zip'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+      - name: Apply R5 smoothing baseline
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Firmware_GD32/Inc/config.h')
+          s=p.read_text()
+          s=s.replace('#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing', '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency')
+          p.write_text(s)
+          PY
+      - name: Build USART3 current variant
+        run: |
+          cd Firmware_GD32
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          cp build/hover.bin ../GD32_TEST_USART3_PB10_PB11.bin
+      - name: Patch control input to USART2
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('Firmware_GD32/Inc/config.h')
+          s=p.read_text()
+          old='''  // #define CONTROL_SERIAL_USART2  0  // FFB: not used; USART2 is not 5V tolerant\n'''
+          new='''  #define CONTROL_SERIAL_USART2  0  // TEST: left sensor cable, PA3 RX\n'''
+          if old not in s:
+              raise SystemExit('USART2 marker not found')
+          s=s.replace(old,new,1)
+          old2='''  #define CONTROL_SERIAL_USART3  0    // FFB: Leonardo TX1 -> USART3 RX (5V-tolerant input)\n'''
+          new2='''  // #define CONTROL_SERIAL_USART3  0    // TEST disabled\n'''
+          if old2 not in s:
+              raise SystemExit('USART3 marker not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s)
+          PY
+      - name: Build USART2 test variant
+        run: |
+          cd Firmware_GD32
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          cp build/hover.bin ../GD32_TEST_USART2_PA2_PA3.bin
+      - name: Package
+        run: |
+          mkdir -p UART_TEST_VARIANTS
+          cp GD32_TEST_USART3_PB10_PB11.bin UART_TEST_VARIANTS/
+          cp GD32_TEST_USART2_PA2_PA3.bin UART_TEST_VARIANTS/
+          cat > UART_TEST_VARIANTS/README.txt <<'EOF'
+GD32_TEST_USART3_PB10_PB11.bin = current setup, RX PB11 / TX PB10, 115200.
+GD32_TEST_USART2_PA2_PA3.bin = test setup, RX PA3 / TX PA2, 115200.
+WARNING: source config states USART2 RX is not 5V tolerant. Do NOT connect Leonardo 5V TX directly to PA3. Use a 5V->3.3V level divider/shifter for this test.
+EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_UART_TEST_VARIANTS
+          path: UART_TEST_VARIANTS
