@@ -1,4 +1,4 @@
-name: Inspect Leonardo UART source
+name: Inspect UART sources
 
 on:
   push:
@@ -15,12 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Extract source bundle
         run: unzip -q source_bundle.zip
-      - name: Collect Leonardo source
+      - name: Collect UART-related source
         run: |
           mkdir -p INSPECT
           cp -a Firmware_Leonardo/brWheel_my INSPECT/
-          grep -RniE 'Serial1|115200|0xABCD|ABCD|steer|speed|force|torque|MT6701' Firmware_Leonardo/brWheel_my > INSPECT/uart_hits.txt || true
+          cp -a Firmware_GD32 INSPECT/
+          grep -RniE 'Serial1|115200|0xABCD|ABCD|steer|speed|force|torque|USART|timeout|MOTOR_RIGHT|MOTOR_LEFT|STEER_COEFFICIENT|SPEED_COEFFICIENT' Firmware_Leonardo/brWheel_my Firmware_GD32 > INSPECT/uart_hits.txt || true
       - uses: actions/upload-artifact@v4
         with:
-          name: leonardo-source-inspect
+          name: uart-source-inspect
           path: INSPECT
