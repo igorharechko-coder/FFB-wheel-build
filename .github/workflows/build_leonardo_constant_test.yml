@@ -1,0 +1,81 @@
+name: Build Leonardo constant torque test
+
+on:
+  push:
+    branches: [fix-uart-protocol]
+    paths:
+      - '.github/workflows/build_leonardo_constant_test.yml'
+      - 'source_bundle.zip'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.6.21
+
+      - name: Patch constant 5 percent torque test
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/HoverboardUART.ino')
+          s = p.read_text()
+          start = s.index('void HoverboardSendTorque(int32_t torque) {')
+          end = s.index('\n}\n\n#endif', start) + 2
+          replacement = '''void HoverboardSendTorque(int32_t torque) {\n  (void)torque;\n  // DIAGNOSTIC ONLY: fixed +5% motor command to verify Leonardo -> UART -> GD32 -> motor chain.\n  HoverboardSend(0, 50);\n}'''
+          s = s[:start] + replacement + s[end:]
+          p.write_text(s)
+          PY
+
+      - name: Fix Linux include case
+        run: |
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo test firmware
+        run: |
+          mkdir -p build_leonardo TEST_READY
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" TEST_READY/Leonardo_UART_MOTOR_TEST_5PCT.hex
+          cat > TEST_READY/README.txt <<'EOF'
+DIAGNOSTIC FIRMWARE ONLY.
+Outputs a fixed +5% hoverboard motor command (speed field = +50 of 1000) whenever the FFB output routine runs.
+Use only briefly with the wheel/motor free to move. Restore Leonardo_FFB_MT6701.hex after the test.
+EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_UART_MOTOR_TEST_5PCT
+          path: TEST_READY
