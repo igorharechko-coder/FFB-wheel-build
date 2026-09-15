@@ -38,13 +38,13 @@ jobs:
           from pathlib import Path
           p=Path('Firmware_GD32/Inc/config.h')
           s=p.read_text()
-          old='''  // #define CONTROL_SERIAL_USART2  0  // FFB: not used; USART2 is not 5V tolerant\n'''
-          new='''  #define CONTROL_SERIAL_USART2  0  // TEST: left sensor cable, PA3 RX\n'''
+          old='  // #define CONTROL_SERIAL_USART2  0  // FFB: not used; USART2 is not 5V tolerant\n'
+          new='  #define CONTROL_SERIAL_USART2  0  // TEST: left sensor cable, PA3 RX\n'
           if old not in s:
               raise SystemExit('USART2 marker not found')
           s=s.replace(old,new,1)
-          old2='''  #define CONTROL_SERIAL_USART3  0    // FFB: Leonardo TX1 -> USART3 RX (5V-tolerant input)\n'''
-          new2='''  // #define CONTROL_SERIAL_USART3  0    // TEST disabled\n'''
+          old2='  #define CONTROL_SERIAL_USART3  0    // FFB: Leonardo TX1 -> USART3 RX (5V-tolerant input)\n'
+          new2='  // #define CONTROL_SERIAL_USART3  0    // TEST disabled\n'
           if old2 not in s:
               raise SystemExit('USART3 marker not found')
           s=s.replace(old2,new2,1)
@@ -61,11 +61,11 @@ jobs:
           mkdir -p UART_TEST_VARIANTS
           cp GD32_TEST_USART3_PB10_PB11.bin UART_TEST_VARIANTS/
           cp GD32_TEST_USART2_PA2_PA3.bin UART_TEST_VARIANTS/
-          cat > UART_TEST_VARIANTS/README.txt <<'EOF'
-GD32_TEST_USART3_PB10_PB11.bin = current setup, RX PB11 / TX PB10, 115200.
-GD32_TEST_USART2_PA2_PA3.bin = test setup, RX PA3 / TX PA2, 115200.
-WARNING: source config states USART2 RX is not 5V tolerant. Do NOT connect Leonardo 5V TX directly to PA3. Use a 5V->3.3V level divider/shifter for this test.
-EOF
+          printf '%s\n' \
+            'GD32_TEST_USART3_PB10_PB11.bin = current setup, RX PB11 / TX PB10, 115200.' \
+            'GD32_TEST_USART2_PA2_PA3.bin = test setup, RX PA3 / TX PA2, 115200.' \
+            'WARNING: source config states USART2 RX is not 5V tolerant. Do NOT connect Leonardo 5V TX directly to PA3. Use a 5V->3.3V level divider/shifter for this test.' \
+            > UART_TEST_VARIANTS/README.txt
       - uses: actions/upload-artifact@v4
         with:
           name: GD32_UART_TEST_VARIANTS
