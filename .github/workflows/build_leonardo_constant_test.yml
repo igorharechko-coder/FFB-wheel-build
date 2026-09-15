@@ -23,7 +23,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
-      - name: Patch constant 5 percent torque test
+      - name: Patch constant 20 percent torque test
         shell: bash
         run: |
           python3 - <<'PY'
@@ -32,7 +32,7 @@ jobs:
           s = p.read_text()
           start = s.index('void HoverboardSendTorque(int32_t torque) {')
           end = s.index('\n}\n\n#endif', start) + 2
-          replacement = '''void HoverboardSendTorque(int32_t torque) {\n  (void)torque;\n  // DIAGNOSTIC ONLY: fixed +5% motor command to verify Leonardo -> UART -> GD32 -> motor chain.\n  HoverboardSend(0, 50);\n}'''
+          replacement = '''void HoverboardSendTorque(int32_t torque) {\n  (void)torque;\n  // DIAGNOSTIC ONLY: fixed +20% motor command to verify Leonardo -> UART -> GD32 -> motor chain.\n  HoverboardSend(0, 200);\n}'''
           s = s[:start] + replacement + s[end:]
           p.write_text(s)
           PY
@@ -68,10 +68,10 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" TEST_READY/Leonardo_UART_MOTOR_TEST_5PCT.hex
-          printf '%s\n' 'DIAGNOSTIC FIRMWARE ONLY.' 'Fixed +5% hoverboard motor command.' 'Use briefly with motor free to move. Restore Leonardo_FFB_MT6701.hex after test.' > TEST_READY/README.txt
+          cp "$HEX" TEST_READY/Leonardo_UART_MOTOR_TEST_20PCT.hex
+          printf '%s\n' 'DIAGNOSTIC FIRMWARE ONLY.' 'Fixed +20% hoverboard motor command.' 'Use only for a very brief test with motor free to move. Restore Leonardo_FFB_MT6701.hex after test.' > TEST_READY/README.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_UART_MOTOR_TEST_5PCT
+          name: Leonardo_UART_MOTOR_TEST_20PCT
           path: TEST_READY
