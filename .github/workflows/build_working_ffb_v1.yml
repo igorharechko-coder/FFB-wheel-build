@@ -1,0 +1,153 @@
+name: Build working FFB V1 10pct
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'source_bundle.zip'
+      - '.github/workflows/build_ready.yml'
+
+jobs:
+  build-leonardo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.6.21
+
+      - name: Inspect MT6701 compatibility source
+        shell: bash
+        run: |
+          echo "=== MT6701Compat.h ==="
+          cat Firmware_Leonardo/brWheel_my/MT6701Compat.h
+
+      - name: Invert MT6701 steering direction
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = p.read_text()
+          old = 'turn.x = as5600x.getCumulativePosition() - ROTATION_MID; // milos, AS5600 angle readout'
+          new = 'turn.x = ROTATION_MID - as5600x.getCumulativePosition(); // MT6701 steering direction inverted'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('MT6701 steering readout marker not found')
+          p.write_text(s)
+          print('Applied MT6701 steering inversion')
+          PY
+
+      - name: Apply R5-like baseline tuning
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          cfg_h = Path('Firmware_Leonardo/brWheel_my/Config.h')
+          s = cfg_h.read_text()
+          s, n = re.subn(r'#define FIRMWARE_VERSION\s+0xFA', '#define FIRMWARE_VERSION         0xFB', s, count=1)
+          if n != 1 and 'FIRMWARE_VERSION         0xFB' not in s:
+              raise SystemExit('FIRMWARE_VERSION marker not found')
+          cfg_h.write_text(s)
+
+          cfg = Path('Firmware_Leonardo/brWheel_my/Config.ino')
+          s = cfg.read_text()
+          gains = {
+              'GEN': 60,
+              'CNT': 100,
+              'PER': 80,
+              'STP': 80,
+              'SPR': 35,
+              'DMP': 20,
+              'FRC': 8,
+              'INR': 10,
+              'CTS': 20,
+          }
+          for key, value in gains.items():
+              pat = rf'(^\s*)SetParam\(PARAM_ADDR_{key}_GAIN, v8\);[^\n]*'
+              repl = rf'\1v8 = {value};\n\1SetParam(PARAM_ADDR_{key}_GAIN, v8);'
+              s, n = re.subn(pat, repl, s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Gain marker not found: {key}')
+          cfg.write_text(s)
+
+          ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = ino.read_text()
+          replacements = {
+              'configGeneralGain': 60,
+              'configDamperGain': 20,
+              'configFrictionGain': 8,
+              'configSpringGain': 35,
+              'configInertiaGain': 10,
+              'configCenterGain': 20,
+          }
+          for name, value in replacements.items():
+              s, n = re.subn(rf'(^\s*{name}\s*=\s*)\d+(;)', rf'\g<1>{value}\2', s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Fallback tuning marker not found: {name}')
+          ino.write_text(s)
+          PY
+
+      - name: Apply 10 percent motor safety cap
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/HoverboardUART.ino')
+          s = p.read_text()
+          marker = 'void HoverboardSendTorque(int32_t torque) {'
+          if marker not in s:
+              raise SystemExit('HoverboardSendTorque marker not found')
+          repl = marker + '\n  if (torque > 100) torque = 100;\n  if (torque < -100) torque = -100; // WORKING FFB V1 hard +/-10% cap'
+          s = s.replace(marker, repl, 1)
+          p.write_text(s)
+          PY
+
+      - name: Fix Linux include case
+        run: |
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo
+        run: |
+          mkdir -p build_leonardo READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_WORKING_FFB_V1_10PCT.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_WORKING_FFB_V1_10PCT
+          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+
