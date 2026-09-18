@@ -60,19 +60,7 @@ jobs:
           mt = Path('Firmware_Leonardo/brWheel_my/MT6701Compat.h')
           ms = mt.read_text()
           pat = re.compile(r'int32_t getCumulativePosition\(\) \{.*?^  \}', re.S | re.M)
-          new_fn = """int32_t getCumulativePosition() {
-    uint16_t raw;
-    if (!readRaw(raw)) return _zeroOffset;
-    if (!_initialized) {
-      _lastRaw = raw;
-      _initialized = true;
-      return _zeroOffset;
-    }
-    int16_t delta = (int16_t)raw - (int16_t)_lastRaw;
-    if (delta > 8192) delta -= 16384;
-    else if (delta < -8192) delta += 16384;
-    return _zeroOffset + delta;
-  }"""
+          new_fn = "int32_t getCumulativePosition() {\\n    uint16_t raw;\\n    if (!readRaw(raw)) return _zeroOffset;\\n    if (!_initialized) {\\n      _lastRaw = raw;\\n      _initialized = true;\\n      return _zeroOffset;\\n    }\\n    int16_t delta = (int16_t)raw - (int16_t)_lastRaw;\\n    if (delta > 8192) delta -= 16384;\\n    else if (delta < -8192) delta += 16384;\\n    return _zeroOffset + delta;\\n  }"
           ms, n = pat.subn(new_fn, ms, count=1)
           if n != 1:
               raise SystemExit('MT6701 cumulative function marker not found')
