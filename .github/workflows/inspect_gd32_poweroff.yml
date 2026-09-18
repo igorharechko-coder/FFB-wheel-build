@@ -1,0 +1,22 @@
+name: Inspect GD32 auto power off
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inspect_gd32_poweroff.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract
+        run: unzip -q source_bundle.zip
+      - name: Find poweroff logic
+        shell: bash
+        run: |
+          echo "=== likely symbols ==="
+          grep -RniE "power.?off|shutdown|sleep|timeout|inactive|inactiv|OFF_TIMEOUT|SHUTDOWN|POWER_OFF|buzzer|button" Firmware_GD32 || true
+          echo "=== files ==="
+          find Firmware_GD32 -maxdepth 3 -type f | sort
