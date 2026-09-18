@@ -1,0 +1,121 @@
+name: Build Leonardo safe FFB sign test
+
+on:
+  push:
+    branches: [fix-uart-protocol]
+    paths:
+      - '.github/workflows/build_leonardo_ffb_safe_test.yml'
+      - 'source_bundle.zip'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install Arduino AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.6.21
+
+      - name: Apply safe FFB sign-test patches
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          # Keep the already-confirmed MT6701/HID steering direction.
+          ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = ino.read_text()
+          old = 'turn.x = as5600x.getCumulativePosition() - ROTATION_MID; // milos, AS5600 angle readout'
+          new = 'turn.x = ROTATION_MID - as5600x.getCumulativePosition(); // MT6701 steering direction inverted'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('MT6701 steering marker not found')
+
+          # Very low fallback gains for first closed-loop FFB sign test.
+          vals = {
+              'configGeneralGain': 5,
+              'configDamperGain': 0,
+              'configFrictionGain': 0,
+              'configSpringGain': 5,
+              'configInertiaGain': 0,
+              'configCenterGain': 5,
+          }
+          for name, value in vals.items():
+              s, n = re.subn(rf'(^\s*{name}\s*=\s*)\d+(;)', rf'\g<1>{value}\2', s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Fallback marker not found: {name}')
+          ino.write_text(s)
+
+          # Low stored/default gains too.
+          cfg = Path('Firmware_Leonardo/brWheel_my/Config.ino')
+          s = cfg.read_text()
+          gains = {
+              'GEN': 5, 'CNT': 5, 'PER': 5, 'STP': 5,
+              'SPR': 5, 'DMP': 0, 'FRC': 0, 'INR': 0, 'CTS': 5,
+          }
+          for key, value in gains.items():
+              pat = rf'(^\s*)SetParam\(PARAM_ADDR_{key}_GAIN, v8\);[^\n]*'
+              repl = rf'\1v8 = {value};\n\1SetParam(PARAM_ADDR_{key}_GAIN, v8);'
+              s, n = re.subn(pat, repl, s, count=1, flags=re.M)
+              if n != 1:
+                  raise SystemExit(f'Gain marker not found: {key}')
+          cfg.write_text(s)
+
+          # Hard safety cap on the torque request before UART transmission.
+          uart = Path('Firmware_Leonardo/brWheel_my/HoverboardUART.ino')
+          s = uart.read_text()
+          marker = 'void HoverboardSendTorque(int32_t torque) {'
+          if marker not in s:
+              raise SystemExit('HoverboardSendTorque marker not found')
+          insert = marker + '\n  if (torque > 30) torque = 30;\n  if (torque < -30) torque = -30; // SAFE SIGN TEST: hard +/-3% cap'
+          s = s.replace(marker, insert, 1)
+          uart.write_text(s)
+          PY
+
+      - name: Fix Linux include case
+        run: |
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo safe FFB test
+        run: |
+          mkdir -p build_leonardo TEST_READY
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" TEST_READY/Leonardo_FFB_SAFE_SIGN_TEST_3PCT.hex
+          printf '%s\n' 'SAFE CLOSED-LOOP FFB SIGN TEST.' 'MT6701 steering direction inverted as already confirmed.' 'FFB gains are low and UART torque command is hard-capped to +/-30 (~3% command scale).' 'If the wheel pushes away from center, cut 24 V immediately.' > TEST_READY/README.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_FFB_SAFE_SIGN_TEST_3PCT
+          path: TEST_READY
