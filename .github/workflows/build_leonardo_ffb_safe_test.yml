@@ -42,12 +42,12 @@ jobs:
 
           # Very low fallback gains for first closed-loop FFB sign test.
           vals = {
-              'configGeneralGain': 5,
+              'configGeneralGain': 10,
               'configDamperGain': 0,
               'configFrictionGain': 0,
-              'configSpringGain': 5,
+              'configSpringGain': 10,
               'configInertiaGain': 0,
-              'configCenterGain': 5,
+              'configCenterGain': 10,
           }
           for name, value in vals.items():
               s, n = re.subn(rf'(^\s*{name}\s*=\s*)\d+(;)', rf'\g<1>{value}\2', s, count=1, flags=re.M)
@@ -59,8 +59,8 @@ jobs:
           cfg = Path('Firmware_Leonardo/brWheel_my/Config.ino')
           s = cfg.read_text()
           gains = {
-              'GEN': 5, 'CNT': 5, 'PER': 5, 'STP': 5,
-              'SPR': 5, 'DMP': 0, 'FRC': 0, 'INR': 0, 'CTS': 5,
+              'GEN': 10, 'CNT': 10, 'PER': 5, 'STP': 5,
+              'SPR': 10, 'DMP': 0, 'FRC': 0, 'INR': 0, 'CTS': 10,
           }
           for key, value in gains.items():
               pat = rf'(^\s*)SetParam\(PARAM_ADDR_{key}_GAIN, v8\);[^\n]*'
@@ -76,7 +76,7 @@ jobs:
           marker = 'void HoverboardSendTorque(int32_t torque) {'
           if marker not in s:
               raise SystemExit('HoverboardSendTorque marker not found')
-          insert = marker + '\n  if (torque > 30) torque = 30;\n  if (torque < -30) torque = -30; // SAFE SIGN TEST: hard +/-3% cap'
+          insert = marker + '\n  if (torque > 40) torque = 40;\n  if (torque < -40) torque = -40; // SAFE FFB TEST: hard +/-4% cap'
           s = s.replace(marker, insert, 1)
           uart.write_text(s)
           PY
@@ -112,10 +112,10 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" TEST_READY/Leonardo_FFB_SAFE_SIGN_TEST_3PCT.hex
-          printf '%s\n' 'SAFE CLOSED-LOOP FFB SIGN TEST.' 'MT6701 steering direction inverted as already confirmed.' 'FFB gains are low and UART torque command is hard-capped to +/-30 (~3% command scale).' 'If the wheel pushes away from center, cut 24 V immediately.' > TEST_READY/README.txt
+          cp "$HEX" TEST_READY/Leonardo_FFB_SAFE_CENTER_TEST_4PCT.hex
+          printf '%s\n' 'SAFE CLOSED-LOOP FFB CENTERING TEST.' 'MT6701 steering direction inverted as already confirmed.' 'FFB return-to-center gains are increased moderately and UART torque command is hard-capped to +/-40 (~4% command scale).' 'If the wheel pushes away from center, cut 24 V immediately.' > TEST_READY/README.txt
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_SAFE_SIGN_TEST_3PCT
+          name: Leonardo_FFB_SAFE_CENTER_TEST_4PCT
           path: TEST_READY
