@@ -1,0 +1,22 @@
+name: Inspect GD32 idle shutdown
+
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect_gd32_idle_shutdown.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source
+        run: unzip -q source_bundle.zip
+      - name: Search GD32 idle shutdown logic
+        shell: bash
+        run: |
+          echo "=== candidate terms ==="
+          grep -RniE "shutdown|power.?off|poweroff|inactiv|timeout|idle|sleep|standby|auto.?off|button|buzzer|enable|disable" Firmware_GD32 || true
+          echo "=== source files ==="
+          find Firmware_GD32 -maxdepth 3 -type f | sort
