@@ -23,11 +23,22 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
-      - name: Diagnose MT6701 steering integration
+      - name: Invert MT6701 steering direction
         shell: bash
         run: |
-          echo "=== MT6701 / I2C / angle references ==="
-          grep -RniE 'MT6701|0x06|16383|16384|Wire\.|steering|wheelPos|angle' Firmware_Leonardo/brWheel_my || true
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = p.read_text()
+          old = 'turn.x = as5600x.getCumulativePosition() - ROTATION_MID; // milos, AS5600 angle readout'
+          new = 'turn.x = ROTATION_MID - as5600x.getCumulativePosition(); // MT6701 steering direction inverted'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('MT6701 steering readout marker not found')
+          p.write_text(s)
+          print('Applied MT6701 steering inversion')
+          PY
 
       - name: Apply R5-like baseline tuning
         shell: bash
@@ -112,12 +123,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_MT6701
-          path: READY_TO_FLASH/Leonardo_FFB_MT6701.hex
+          name: Leonardo_FFB_MT6701_INVERTED
+          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
 
   build-gd32:
     runs-on: ubuntu-latest
