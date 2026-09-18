@@ -1,0 +1,17 @@
+name: Inspect GD32 inactivity timeout use
+
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect_gd32_inactivity_use.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: unzip -q source_bundle.zip
+      - name: Show inactivity timeout code
+        run: |
+          grep -RniC 12 "INACTIVITY_TIMEOUT" Firmware_GD32 || true
+          grep -RniC 12 "inactivity" Firmware_GD32/Src Firmware_GD32/Inc/config.h || true
