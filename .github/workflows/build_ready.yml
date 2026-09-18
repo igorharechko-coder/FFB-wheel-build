@@ -23,6 +23,12 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
+      - name: Inspect MT6701 compatibility source
+        shell: bash
+        run: |
+          echo "=== MT6701Compat.h ==="
+          cat Firmware_Leonardo/brWheel_my/MT6701Compat.h
+
       - name: Invert MT6701 steering direction
         shell: bash
         run: |
