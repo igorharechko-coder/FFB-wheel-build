@@ -5,7 +5,7 @@ on:
   push:
     paths:
       - 'source_bundle.zip'
-      - '.github/workflows/build_ready.yml'
+      - '.github/workflows/build_working_ffb_v1.yml'
 
 jobs:
   build-leonardo:
@@ -149,5 +149,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Leonardo_WORKING_FFB_V1_10PCT
-          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+          path: READY_TO_FLASH/Leonardo_WORKING_FFB_V1_10PCT.hex
 
