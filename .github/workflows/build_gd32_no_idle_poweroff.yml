@@ -1,0 +1,73 @@
+name: Build GD32 FFB no idle poweroff
+
+on:
+  push:
+    paths:
+      - '.github/workflows/build_gd32_no_idle_poweroff.yml'
+  workflow_dispatch:
+
+jobs:
+  build-gd32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - name: Disable inactivity auto poweroff
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Src/main.c')
+          s = p.read_text()
+          old = 'if (inactivity_timeout_counter > (INACTIVITY_TIMEOUT * 60 * 1000) / (DELAY_IN_MAIN_LOOP + 1)) {'
+          new = 'if (0 && inactivity_timeout_counter > (INACTIVITY_TIMEOUT * 60 * 1000) / (DELAY_IN_MAIN_LOOP + 1)) { // FFB: idle auto-poweroff disabled'
+          if old not in s:
+              raise SystemExit('Inactivity poweroff condition not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          PY
+
+      - name: Apply motor-side smoothing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Inc/config.h')
+          s = p.read_text()
+          old = '#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing'
+          new = '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('DEFAULT_FILTER marker not found')
+          p.write_text(s)
+          PY
+
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Compile GD32
+        working-directory: Firmware_GD32
+        run: |
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          test -f build/hover.bin
+          test -f build/hover.hex
+
+      - name: Collect files
+        run: |
+          mkdir -p READY_TO_FLASH
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_NO_IDLE_POWEROFF.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_NO_IDLE_POWEROFF.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_FOC_24V_NO_IDLE_POWEROFF
+          path: |
+            READY_TO_FLASH/GD32_FOC_24V_NO_IDLE_POWEROFF.bin
+            READY_TO_FLASH/GD32_FOC_24V_NO_IDLE_POWEROFF.hex
