@@ -23,6 +23,12 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install arduino:avr@1.6.21
 
+      - name: Diagnose MT6701 steering integration
+        shell: bash
+        run: |
+          echo "=== MT6701 / I2C / angle references ==="
+          grep -RniE 'MT6701|0x06|16383|16384|Wire\.|steering|wheelPos|angle' Firmware_Leonardo/brWheel_my || true
+
       - name: Apply R5-like baseline tuning
         shell: bash
         run: |
