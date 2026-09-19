@@ -107,10 +107,10 @@ jobs:
           t = p.read_text()
           marker = 'button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
           replacement = """accel.val = map(analogRead(A0), 0, 1023, 0, Z_AXIS_PHYS_MAX);
-        brake.val = map(analogRead(A1), 0, 1023, 0, Y_AXIS_PHYS_MAX);
-        clutch.val = 0;
-        hbrake.val = 0;
-        button = 0; // 2-pedal diagnostic"""
+          brake.val = map(analogRead(A1), 0, 1023, 0, Y_AXIS_PHYS_MAX);
+          clutch.val = 0;
+          hbrake.val = 0;
+          button = 0; // 2-pedal diagnostic"""
           if marker not in t:
               raise SystemExit('Input-report marker not found')
           t = t.replace(marker, replacement, 1)
