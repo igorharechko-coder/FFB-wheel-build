@@ -106,8 +106,8 @@ jobs:
           p = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
           t = p.read_text()
           marker = 'button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
-          replacement = """accel.val = constrain(((long)analogRead(A0) * 80L) / 9L, 0L, (long)Z_AXIS_PHYS_MAX);
-          brake.val = 0;\n          clutch.val = constrain((long)analogRead(A2) * 10L, 0L, (long)RX_AXIS_PHYS_MAX);
+          replacement = """accel.val = constrain(map(analogRead(A0), 32, 449, 0, Z_AXIS_PHYS_MAX), 0L, (long)Z_AXIS_PHYS_MAX);
+          brake.val = 0;\n          clutch.val = constrain(map(analogRead(A2), 0, 353, 0, RX_AXIS_PHYS_MAX), 0L, (long)RX_AXIS_PHYS_MAX);
           // clutch field repurposed for brake on RX axis
           hbrake.val = 0;
           button = 0; // 2-pedal diagnostic"""
@@ -115,7 +115,7 @@ jobs:
               raise SystemExit('Input-report marker not found')
           t = t.replace(marker, replacement, 1)
           p.write_text(t)
-          print('2 pedals full range x2: A0 gas on Z, A2 brake on RX; Y neutral; buttons off')
+          print('2 pedals exact calibrated: A0 32-449 gas on Z, A2 0-353 brake on RX; Y neutral; buttons off')
           PY
 
       - name: Fix Linux include case
@@ -149,12 +149,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_2PEDALS_CALIBRATED.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_2PEDALS_EXACT_CALIBRATED.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_2PEDALS_CALIBRATED
-          path: READY_TO_FLASH/Leonardo_FFB_2PEDALS_CALIBRATED.hex
+          name: Leonardo_FFB_2PEDALS_EXACT_CALIBRATED
+          path: READY_TO_FLASH/Leonardo_FFB_2PEDALS_EXACT_CALIBRATED.hex
 
   build-gd32:
     runs-on: ubuntu-latest
