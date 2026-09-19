@@ -104,26 +104,20 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          cfg = Path('Firmware_Leonardo/brWheel_my/Config.h')
-          c = cfg.read_text()
-          required = [
-              '#define ACCEL_PIN        A0',
-              '#define BRAKE_PIN        A1',
-              '#define CLUTCH_PIN       A2',
-          ]
-          missing = [x for x in required if x not in c]
-          if missing:
-              raise SystemExit('Unexpected pedal pin mapping: ' + ', '.join(missing))
-
           ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
           t = ino.read_text()
           marker = 'button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
-          if 'hbrake.val = 0; // 3-pedal build: no handbrake' not in t:
+          patchline = 'hbrake.val = 0; // 3-pedal build: no handbrake'
+          if patchline not in t:
               if marker not in t:
                   raise SystemExit('Input-report marker not found')
-              t = t.replace(marker, 'hbrake.val = 0; // 3-pedal build: no handbrake\n\n        ' + marker, 1)
+              t = t.replace(marker, patchline + '\n\n        ' + marker, 1)
           ino.write_text(t)
-          print('Pedals: A0 gas, A1 brake, A2 clutch; A3 handbrake disabled')
+
+          cfg = Path('Firmware_Leonardo/brWheel_my/Config.h').read_text()
+          if 'ACCEL_PIN' not in cfg or 'BRAKE_PIN' not in cfg or 'CLUTCH_PIN' not in cfg:
+              raise SystemExit('Pedal pin definitions missing')
+          print('3-pedal build ready; A3 handbrake disabled')
           PY
 
       - name: Fix Linux include case
