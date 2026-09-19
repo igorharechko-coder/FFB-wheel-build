@@ -98,6 +98,299 @@ jobs:
           ino.write_text(s)
           PY
 
+      - name: Force independent 3-pedal mapping
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          cfg = Path('Firmware_Leonardo/brWheel_my/Config.h')
+          s = cfg.read_text()
+
+          # Explicit pedal pin map for our Leonardo:
+          # A0 = accelerator, A1 = brake, A2 = clutch.
+          s, n0 = re.subn(r'^#define ACCEL_PIN\s+A\d+\s*
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo
+        run: |
+          mkdir -p build_leonardo READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_PEDALS_A0_A1_A2.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_FFB_PEDALS_A0_A1_A2
+          path: READY_TO_FLASH/Leonardo_FFB_PEDALS_A0_A1_A2.hex
+
+  build-gd32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - name: Apply R5-like motor-side smoothing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Inc/config.h')
+          s = p.read_text()
+          old = '#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing'
+          new = '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('DEFAULT_FILTER marker not found')
+          p.write_text(s)
+          PY
+
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Compile GD32
+        working-directory: Firmware_GD32
+        run: |
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          test -f build/hover.bin
+          test -f build/hover.hex
+
+      - name: Collect GD32 files
+        run: |
+          mkdir -p READY_TO_FLASH
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_FOC_24V_RIGHT
+          path: |
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+, '#define ACCEL_PIN        A0', s, count=1, flags=re.M)
+          s, n1 = re.subn(r'^#define BRAKE_PIN\s+A\d+\s*
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo
+        run: |
+          mkdir -p build_leonardo READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_FFB_MT6701_INVERTED
+          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+
+  build-gd32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - name: Apply R5-like motor-side smoothing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Inc/config.h')
+          s = p.read_text()
+          old = '#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing'
+          new = '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('DEFAULT_FILTER marker not found')
+          p.write_text(s)
+          PY
+
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Compile GD32
+        working-directory: Firmware_GD32
+        run: |
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          test -f build/hover.bin
+          test -f build/hover.hex
+
+      - name: Collect GD32 files
+        run: |
+          mkdir -p READY_TO_FLASH
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_FOC_24V_RIGHT
+          path: |
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+, '#define BRAKE_PIN        A1', s, count=1, flags=re.M)
+          s, n2 = re.subn(r'^#define CLUTCH_PIN\s+A\d+\s*
+          grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
+
+      - name: Apply modified Arduino core
+        run: |
+          CORE="$HOME/.arduino15/packages/arduino/hardware/avr/1.6.21/cores"
+          mv "$CORE/arduino" "$CORE/arduino_org"
+          cp -a Firmware_Leonardo/arduino-1.8.5/hardware/arduino/cores/arduino "$CORE/arduino"
+          cp "$CORE/arduino_org/IPAddress.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/IPAddress.h" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.cpp" "$CORE/arduino/"
+          cp "$CORE/arduino_org/new.h" "$CORE/arduino/"
+
+      - name: Install bundled libraries
+        run: |
+          mkdir -p "$HOME/Arduino/libraries"
+          cp -a Firmware_Leonardo/arduino-1.8.5/libraries/. "$HOME/Arduino/libraries/"
+          arduino-cli lib install "HX711_ADC"
+          sed -i '/^[[:space:]]*yield();[[:space:]]*$/d' "$HOME/Arduino/libraries/HX711_ADC/src/HX711_ADC.cpp"
+
+      - name: Compile Leonardo
+        run: |
+          mkdir -p build_leonardo READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            Firmware_Leonardo/brWheel_my \
+            --build-path "$PWD/build_leonardo" \
+            --libraries "$HOME/Arduino/libraries"
+          HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_FFB_MT6701_INVERTED
+          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+
+  build-gd32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract source bundle
+        run: unzip -q source_bundle.zip
+
+      - name: Apply R5-like motor-side smoothing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Inc/config.h')
+          s = p.read_text()
+          old = '#define DEFAULT_FILTER              65535 // FFB: no additional input low-pass smoothing'
+          new = '#define DEFAULT_FILTER              58982 // FFB baseline: ~0.90, very light smoothing with low added latency'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('DEFAULT_FILTER marker not found')
+          p.write_text(s)
+          PY
+
+      - name: Install ARM GCC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi
+
+      - name: Compile GD32
+        working-directory: Firmware_GD32
+        run: |
+          make clean || true
+          make -e VARIANT=VARIANT_USART
+          test -f build/hover.bin
+          test -f build/hover.hex
+
+      - name: Collect GD32 files
+        run: |
+          mkdir -p READY_TO_FLASH
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GD32_FOC_24V_RIGHT
+          path: |
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+, '#define CLUTCH_PIN       A2', s, count=1, flags=re.M)
+          if not (n0 and n1 and n2):
+              raise SystemExit(f'Pedal pin markers not found: accel={n0} brake={n1} clutch={n2}')
+          cfg.write_text(s)
+
+          ino = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = ino.read_text()
+
+          # We have only 3 pedals; A3 handbrake is not connected. Force RY to zero
+          # so a floating A3 cannot ghost/copy ADC values from the previous channel.
+          marker = 'button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
+          repl = 'hbrake.val = 0; // DIY FFB: no handbrake, suppress floating A3 ghost axis\n\n        ' + marker
+          if repl not in s:
+              if marker not in s:
+                  raise SystemExit('Input report marker not found')
+              s = s.replace(marker, repl, 1)
+          ino.write_text(s)
+
+          print('Pedals fixed: A0=gas, A1=brake, A2=clutch; A3 handbrake disabled')
+          PY
+
       - name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
