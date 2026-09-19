@@ -1,0 +1,37 @@
+name: Build Pedal Calibration HEX
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'PedalCalibration/PedalCalibration.ino'
+      - '.github/workflows/build_pedal_calibration.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install AVR core
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install arduino:avr@1.6.21
+
+      - name: Compile calibration firmware
+        run: |
+          mkdir -p build READY_TO_FLASH
+          arduino-cli compile \
+            --fqbn arduino:avr:leonardo \
+            PedalCalibration \
+            --build-path "$PWD/build"
+          HEX=$(find build -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
+          test -n "$HEX"
+          cp "$HEX" READY_TO_FLASH/Leonardo_PEDAL_RAW_CALIBRATION.hex
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Leonardo_PEDAL_RAW_CALIBRATION
+          path: READY_TO_FLASH/Leonardo_PEDAL_RAW_CALIBRATION.hex
