@@ -98,6 +98,27 @@ jobs:
           ino.write_text(s)
           PY
 
+      - name: Direct pedal test mapping
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          s = p.read_text()
+          old = '        button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
+          new = '''        // DIY direct pedal diagnostic: bypass EEPROM pedal calibration
+        accel.val = map(analogRead(A0), 0, 1023, 0, Z_AXIS_PHYS_MAX);
+        brake.val = map(analogRead(A1), 0, 1023, 0, Y_AXIS_PHYS_MAX);
+        clutch.val = map(analogRead(A2), 0, 1023, 0, RX_AXIS_PHYS_MAX);
+        hbrake.val = 0;
+        button = 0; // disable button inputs during pedal diagnostic'''
+          if old not in s:
+              raise SystemExit('Input report marker not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          print('Direct pedals: A0 gas, A1 brake, A2 clutch; buttons disabled for test')
+          PY
+
       - name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
@@ -129,12 +150,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_PEDALS_DIRECT_TEST.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_MT6701_INVERTED
-          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+          name: Leonardo_FFB_PEDALS_DIRECT_TEST
+          path: READY_TO_FLASH/Leonardo_FFB_PEDALS_DIRECT_TEST.hex
 
   build-gd32:
     runs-on: ubuntu-latest
