@@ -98,6 +98,22 @@ jobs:
           ino.write_text(s)
           PY
 
+      - name: Configure direct 2 pedals
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_Leonardo/brWheel_my/brWheel_my.ino')
+          t = p.read_text()
+          marker = 'button = readInputButtons(); // milos, read all buttons including matrix and hat switch'
+          replacement = 'accel.val = map(analogRead(A0), 0, 1023, 0, Z_AXIS_PHYS_MAX);\\n        brake.val = map(analogRead(A1), 0, 1023, 0, Y_AXIS_PHYS_MAX);\\n        clutch.val = 0;\\n        hbrake.val = 0;\\n        button = 0; // 2-pedal diagnostic'
+          if marker not in t:
+              raise SystemExit('Input-report marker not found')
+          t = t.replace(marker, replacement, 1)
+          p.write_text(t)
+          print('2 pedals direct: A0 gas, A1 brake; buttons off')
+          PY
+
       - name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
@@ -129,12 +145,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_2PEDALS_A0_A1.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_MT6701_INVERTED
-          path: READY_TO_FLASH/Leonardo_FFB_MT6701_INVERTED.hex
+          name: Leonardo_FFB_2PEDALS_A0_A1
+          path: READY_TO_FLASH/Leonardo_FFB_2PEDALS_A0_A1.hex
 
   build-gd32:
     runs-on: ubuntu-latest
