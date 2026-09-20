@@ -118,7 +118,11 @@ jobs:
           print('2 pedals exact calibrated: A0 32-449 gas on Z, A2 0-353 brake on RX; Y neutral; buttons off')
           PY
 
-      - name: Fix Linux include case
+
+      - name: Apply stability patch
+        run: python3 patch_stable.py
+
+- name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
 
@@ -149,12 +153,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_2PEDALS_EXACT_CALIBRATED.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_STABLE_MT6701.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_2PEDALS_EXACT_CALIBRATED
-          path: READY_TO_FLASH/Leonardo_FFB_2PEDALS_EXACT_CALIBRATED.hex
+          name: Leonardo_FFB_STABLE_MT6701
+          path: READY_TO_FLASH/Leonardo_FFB_STABLE_MT6701.hex
 
   build-gd32:
     runs-on: ubuntu-latest
