@@ -68,11 +68,11 @@ jobs:
               'CNT': 100,
               'PER': 100,
               'STP': 100,
-              'SPR': 90,
+              'SPR': 70,
               'DMP': 10,
               'FRC': 10,
               'INR': 15,
-              'CTS': 25,
+              'CTS': 18,
           }
           for key, value in gains.items():
               pat = rf'(^\s*)SetParam\(PARAM_ADDR_{key}_GAIN, v8\);[^\n]*'
@@ -88,9 +88,9 @@ jobs:
               'configGeneralGain': 100,
               'configDamperGain': 10,
               'configFrictionGain': 10,
-              'configSpringGain': 90,
+              'configSpringGain': 70,
               'configInertiaGain': 15,
-              'configCenterGain': 25,
+              'configCenterGain': 18,
           }
           for name, value in replacements.items():
               s, n = re.subn(rf'(^\s*{name}\s*=\s*)\d+(;)', rf'\g<1>{value}\2', s, count=1, flags=re.M)
@@ -154,12 +154,12 @@ jobs:
             --libraries "$HOME/Arduino/libraries"
           HEX=$(find build_leonardo -maxdepth 1 -name '*.hex' ! -name '*with_bootloader*' | head -n1)
           test -n "$HEX"
-          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_R5_LIGHT_STEERING.hex
+          cp "$HEX" READY_TO_FLASH/Leonardo_FFB_R5_LIGHT_SOFT_CENTER.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Leonardo_FFB_R5_LIGHT_STEERING
-          path: READY_TO_FLASH/Leonardo_FFB_R5_LIGHT_STEERING.hex
+          name: Leonardo_FFB_R5_LIGHT_SOFT_CENTER
+          path: READY_TO_FLASH/Leonardo_FFB_R5_LIGHT_SOFT_CENTER.hex
 
   build-gd32:
     runs-on: ubuntu-latest
