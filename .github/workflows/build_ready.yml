@@ -122,7 +122,7 @@ jobs:
       - name: Apply stability patch
         run: python3 patch_stable.py
 
-- name: Fix Linux include case
+      - name: Fix Linux include case
         run: |
           grep -RIl '#include <arduino.h>' Firmware_Leonardo | xargs -r sed -i 's/#include <arduino.h>/#include <Arduino.h>/g'
 
