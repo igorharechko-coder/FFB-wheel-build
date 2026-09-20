@@ -159,7 +159,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Leonardo_FFB_R5_CHARACTER
-          path: READY_TO_FLASH/Leonardo_FFB_STABLE_MT6701.hex
+          path: READY_TO_FLASH/Leonardo_FFB_R5_CHARACTER.hex
 
   build-gd32:
     runs-on: ubuntu-latest
@@ -240,5 +240,5 @@ jobs:
         with:
           name: GD32_FOC_24V_R5_CHARACTER
           path: |
-            READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.bin
-            READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.hex
+            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.bin
+            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.hex
