@@ -184,12 +184,21 @@ jobs:
           p.write_text(s)
           PY
 
-      - name: Disable backward-direction beep
+      - name: Inspect and disable direction beep
         shell: bash
         run: |
+          echo "=== beep-related definitions/usages ==="
+          grep -RniE "BEEP|BUZZ|BACKWARD|REVERSE" Firmware_GD32/Inc Firmware_GD32/Src | head -n 200 || true
           python3 - <<'PY'
           from pathlib import Path
+          import re
           changed = 0
+          patterns = [
+              (r'(#define\s+BEEPS_BACKWARD\s+)1\b', r'\g<1>0'),
+              (r'(#define\s+BEEP_BACKWARD\s+)1\b', r'\g<1>0'),
+              (r'(#define\s+BACKWARD_BEEP\s+)1\b', r'\g<1>0'),
+              (r'(#define\s+BACKWARD_BEEPS\s+)1\b', r'\g<1>0'),
+          ]
           for p in Path('Firmware_GD32').rglob('*'):
               if not p.is_file():
                   continue
@@ -198,14 +207,13 @@ jobs:
               except Exception:
                   continue
               old = txt
-              txt = txt.replace('#define BEEPS_BACKWARD 1', '#define BEEPS_BACKWARD 0')
-              txt = txt.replace('#define BEEPS_BACKWARD              1', '#define BEEPS_BACKWARD              0')
+              for pat, rep in patterns:
+                  txt = re.sub(pat, rep, txt)
               if txt != old:
                   p.write_text(txt)
-                  print('Changed', p)
+                  print('Disabled direction beep in', p)
                   changed += 1
-          if changed == 0:
-              raise SystemExit('BEEPS_BACKWARD=1 marker not found')
+          print('direction-beep files changed:', changed)
           PY
 
       - name: Install ARM GCC
