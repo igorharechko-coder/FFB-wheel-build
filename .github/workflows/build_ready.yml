@@ -223,6 +223,22 @@ jobs:
           echo "=== idle/poweroff related source ==="
           grep -RniE "idle|inactiv|power.?off|poweroff|shutdown|timeout.*power|button.*off|off.*timeout" Firmware_GD32/Inc Firmware_GD32/Src | head -n 300 || true
 
+      - name: Disable idle auto poweroff
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('Firmware_GD32/Src/main.c')
+          s = p.read_text()
+          old = 'if (inactivity_timeout_counter > (INACTIVITY_TIMEOUT * 60 * 1000) / (DELAY_IN_MAIN_LOOP + 1)) {'
+          new = 'if (0 && inactivity_timeout_counter > (INACTIVITY_TIMEOUT * 60 * 1000) / (DELAY_IN_MAIN_LOOP + 1)) { // FFB: idle auto-poweroff disabled'
+          if old not in s:
+              raise SystemExit('Idle poweroff condition not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s)
+          print('Disabled inactivity auto-poweroff; button and safety poweroff remain active')
+          PY
+
       - name: Install ARM GCC
         run: |
           sudo apt-get update
@@ -239,12 +255,12 @@ jobs:
       - name: Collect GD32 files
         run: |
           mkdir -p READY_TO_FLASH
-          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.bin
-          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.hex
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER_NO_IDLE_POWEROFF.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER_NO_IDLE_POWEROFF.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GD32_FOC_24V_R5_CHARACTER
+          name: GD32_FOC_24V_R5_CHARACTER_NO_IDLE_POWEROFF
           path: |
-            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.bin
-            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER.hex
+            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER_NO_IDLE_POWEROFF.bin
+            READY_TO_FLASH/GD32_FOC_24V_R5_CHARACTER_NO_IDLE_POWEROFF.hex
