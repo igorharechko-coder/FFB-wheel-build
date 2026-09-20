@@ -184,6 +184,30 @@ jobs:
           p.write_text(s)
           PY
 
+      - name: Disable backward-direction beep
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          changed = 0
+          for p in Path('Firmware_GD32').rglob('*'):
+              if not p.is_file():
+                  continue
+              try:
+                  txt = p.read_text()
+              except Exception:
+                  continue
+              old = txt
+              txt = txt.replace('#define BEEPS_BACKWARD 1', '#define BEEPS_BACKWARD 0')
+              txt = txt.replace('#define BEEPS_BACKWARD              1', '#define BEEPS_BACKWARD              0')
+              if txt != old:
+                  p.write_text(txt)
+                  print('Changed', p)
+                  changed += 1
+          if changed == 0:
+              raise SystemExit('BEEPS_BACKWARD=1 marker not found')
+          PY
+
       - name: Install ARM GCC
         run: |
           sudo apt-get update
@@ -200,12 +224,12 @@ jobs:
       - name: Collect GD32 files
         run: |
           mkdir -p READY_TO_FLASH
-          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
-          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+          cp Firmware_GD32/build/hover.bin READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.bin
+          cp Firmware_GD32/build/hover.hex READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.hex
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GD32_FOC_24V_RIGHT
+          name: GD32_FOC_24V_RIGHT_NOBEEP
           path: |
-            READY_TO_FLASH/GD32_FOC_24V_RIGHT.bin
-            READY_TO_FLASH/GD32_FOC_24V_RIGHT.hex
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.bin
+            READY_TO_FLASH/GD32_FOC_24V_RIGHT_NOBEEP.hex
