@@ -217,6 +217,12 @@ jobs:
           print('direction-beep files changed:', changed)
           PY
 
+      - name: Inspect idle poweroff logic
+        shell: bash
+        run: |
+          echo "=== idle/poweroff related source ==="
+          grep -RniE "idle|inactiv|power.?off|poweroff|shutdown|timeout.*power|button.*off|off.*timeout" Firmware_GD32/Inc Firmware_GD32/Src | head -n 300 || true
+
       - name: Install ARM GCC
         run: |
           sudo apt-get update
