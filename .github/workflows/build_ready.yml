@@ -6,6 +6,7 @@ on:
     paths:
       - 'source_bundle.zip'
       - '.github/workflows/build_ready.yml'
+      - 'patch_stable.py'
 
 jobs:
   build-leonardo:
