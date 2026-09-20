@@ -275,7 +275,7 @@ if "#define HOVERBOARD_CMD_SLEW_STEP" not in u:
     u = u.replace(
         "#define HOVERBOARD_TORQUE_SCALE_PCT 100",
         "#define HOVERBOARD_TORQUE_SCALE_PCT 100\n"
-        "#define HOVERBOARD_CMD_SLEW_STEP 30 // max command change per 2 ms loop; reduces current spikes\n"
+        "#define HOVERBOARD_CMD_SLEW_STEP 60 // R5-character: faster torque detail while retaining spike limiting\n"
         "extern bool mt6701SafeZero;",
         1
     )
